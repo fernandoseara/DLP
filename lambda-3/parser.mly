@@ -12,6 +12,7 @@
 %token SUCC
 %token PRED
 %token ISZERO
+%token CONCAT
 %token LET
 %token LETREC
 %token IN
@@ -62,6 +63,8 @@ appTerm :
       { TmPred $2 }
   | ISZERO atomicTerm
       { TmIsZero $2 }
+  | CONCAT atomicTerm atomicTerm
+      { TmConcat ($2, $3) }
   | appTerm atomicTerm
       { TmApp ($1, $2) }
 

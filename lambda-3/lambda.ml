@@ -21,6 +21,7 @@ type term =
   | TmSucc of term
   | TmPred of term
   | TmIsZero of term
+  | TmConcat of term * term
   | TmVar of string
   | TmAbs of string * ty * term
   | TmApp of term * term
@@ -57,7 +58,7 @@ let rec string_of_ty ty = match ty with
   | TyNat ->
       "Nat"
   | TyStr ->
-      "Str"
+      "String"
   | TyArr (ty1, ty2) ->
       "(" ^ string_of_ty ty1 ^ ")" ^ " -> " ^ "(" ^ string_of_ty ty2 ^ ")"
 ;;
@@ -105,6 +106,16 @@ let rec typeof ctx tm = match tm with
   | TmIsZero t1 ->
       if typeof ctx t1 = TyNat then TyBool
       else raise (Type_error "argument of iszero is not a number")
+
+    (*T-Concat*)
+  | TmConcat (t1, t2) ->
+      let tyT1 = typeof ctx t1 in
+      let tyT2 = typeof ctx t2 in
+      (match tyT1, tyT2 with
+           TyStr, TyStr -> TyStr
+             
+         | _ -> raise (Type_error "string expected"))
+        
 
     (* T-Var *)
   | TmVar x ->
@@ -173,6 +184,8 @@ let rec string_of_term = function
       "pred " ^ "(" ^ string_of_term t ^ ")"
   | TmIsZero t ->
       "iszero " ^ "(" ^ string_of_term t ^ ")"
+  | TmConcat (t1, t2) ->
+      "concat" ^ "(" ^ string_of_term t1 ^ string_of_term t2 ^ ")"
   | TmVar s ->
       s
   | TmAbs (s, tyS, t) ->
@@ -204,14 +217,16 @@ let rec free_vars tm = match tm with
       lunion (lunion (free_vars t1) (free_vars t2)) (free_vars t3)
   | TmZero ->
       []
-  | TmStr s->
-      [s]
+  | TmStr _ ->
+      []
   | TmSucc t ->
       free_vars t
   | TmPred t ->
       free_vars t
   | TmIsZero t ->
       free_vars t
+  | TmConcat (t1, t2) ->
+       lunion (free_vars t1) (free_vars t2)
   | TmVar s ->
       [s]
   | TmAbs (s, _, t) ->
@@ -245,6 +260,8 @@ let rec subst x s tm = match tm with
       TmPred (subst x s t)
   | TmIsZero t ->
       TmIsZero (subst x s t)
+  | TmConcat (t1, t2) ->
+      TmConcat (subst x s t1, subst x s t2)
   | TmVar y ->
       if y = x then s else tm
   | TmAbs (y, tyY, t) -> 
@@ -277,6 +294,7 @@ let rec isval tm = match tm with
     TmTrue  -> true
   | TmFalse -> true
   | TmAbs _ -> true
+  | TmStr _ -> true
   | t when isnumericval t -> true
   | _ -> false
 ;;
@@ -328,6 +346,18 @@ let rec eval1 vctx tm = match tm with
   | TmIsZero t1 ->
       let t1' = eval1 vctx t1 in
       TmIsZero t1'
+
+  | TmConcat (TmStr v1, TmStr  v2) ->
+      TmStr (v1 ^ v2)
+
+ 
+  | TmConcat (v1, t2) when isval v1 ->
+      let t2' = eval1 vctx t2 in 
+      TmConcat (v1, t2')
+      
+  | TmConcat (t1, t2) ->
+      let t1' = eval1 vctx t1 in
+      TmConcat (t1', t2)
 
     (* E-AppAbs *)
   | TmApp (TmAbs(x, _, t12), v2) when isval v2 ->

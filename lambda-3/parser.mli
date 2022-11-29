@@ -8,6 +8,7 @@ type token =
   | SUCC
   | PRED
   | ISZERO
+  | CONCAT
   | LET
   | LETREC
   | IN

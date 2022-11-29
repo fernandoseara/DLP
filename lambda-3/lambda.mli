@@ -19,6 +19,7 @@ type term =
   | TmSucc of term
   | TmPred of term
   | TmIsZero of term
+  | TmConcat of term * term
   | TmVar of string
   | TmAbs of string * ty * term
   | TmApp of term * term
