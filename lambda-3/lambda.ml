@@ -27,7 +27,9 @@ type term =
   | TmApp of term * term
   | TmLetIn of string * term * term
   | TmFix of term
-  (*| TmTuple of term*)
+  | TmTuple of term
+  | TmRecord of term
+  | TmProj of term * term
 ;;
 
 type command =
@@ -152,6 +154,22 @@ let rec typeof ctx tm = match tm with
              if tyT11 = tyT12 then tyT12
              else raise (Type_error "result of body not compatible with domain")
          | _ -> raise (Type_error "arrow type expected"))
+
+  | TmTuple fields -> 
+      TyTuple (List.map (fun t -> typeof ctx t) fields)
+
+  | TmRecord fields ->
+      TyRecord (List.map (fun (s, t) -> (s, typeof ctx t)) fields)
+
+  | TmProj (t, s) ->
+      (match typeof ctx t with
+           TyRecord fieldtys ->
+             (try List.assoc s fieldtys with
+              Not_found -> raise (Type_error ("label " ^ s ^ " not found")))
+         | TyTuple fieldtys ->
+             (try List.nth fieldtys (int_of_string s - 1) with
+	      _ -> raise (Type_error ("label " ^ s ^ " not found")))
+         | _ -> raise (Type_error ("tuple or record type expected")))
   
 ;;
 ;;
@@ -237,6 +255,12 @@ let rec free_vars tm = match tm with
       lunion (ldif (free_vars t2) [s]) (free_vars t1)
   | TmFix t ->
       free_vars t
+  | TmTuple fields ->
+      List.fold_left (fun fv t1 -> lunion (free_vars t1) fv) [] fields
+  | TmRecord fields ->
+      List.fold_left (fun fv (lb, t1) -> lunion (free_vars t1) fv) [] fields
+  | TmProj (t, lb) ->
+      free_vars t
 ;;
 
 let rec fresh_name x l =
@@ -295,6 +319,8 @@ let rec isval tm = match tm with
   | TmFalse -> true
   | TmAbs _ -> true
   | TmStr _ -> true
+  | TmTuple fields -> List.for_all (fun t1 -> isval t1) fields
+  | TmRecord fields -> List.for_all (fun (lib, t1) -> isval t1) fields
   | t when isnumericval t -> true
   | _ -> false
 ;;
@@ -390,7 +416,43 @@ let rec eval1 vctx tm = match tm with
   | TmFix t1 ->
       let t1' = eval1 vctx t1 in
       TmFix t1'
-  |TmVar s ->
+
+  | TmTuple fields ->
+      let rec evalafield = function
+          [] -> raise NoRuleApplies
+        | v1::rest when isval v1 ->
+           let rest' = evalafield rest in 
+           v1::rest'
+        | t1::rest ->
+           let t1' = eval1 ctx t1 in 
+           t1'::rest
+      in
+      let fields' = evalafield fields in
+      TmTuple fields'
+
+  | TmRecord fields ->
+      let rec evalafield = function
+          [] -> raise NoRuleApplies
+        | (lb, v1)::rest when isval v1 ->
+           let rest' = evalafield rest in 
+           (lb, v1)::rest'
+        | (lb, t1)::rest ->
+           let t1' = eval1 ctx t1 in 
+           (lb, t1')::rest
+      in
+      let fields' = evalafield fields in
+      TmRecord fields'
+  
+  | TmProj (TmTuple fields as v1, lb) when isval v1 ->
+      (try list.nth fields (int_of_string lb - 1) with
+       _ -> raise NoRuleApplies)
+  | TmProj (TmRecord fields as v1, lb) when isval v1 ->
+      (try list.assoc lb fields with
+       Not_found -> raise NoRuleApplies)
+  | TmProj (t1, lb) ->
+      let t1' = eval1 ctx t1 in
+      TmProj (t1', lb)
+  | TmVar s ->
 	getbinding vctx s
 
   | _ ->
