@@ -5,6 +5,8 @@ type ty =
     TyBool
   | TyNat
   | TyStr
+  | TyTuple of ty 
+  | TyRecord of ty 
   | TyArr of ty * ty
 ;;
 
@@ -63,6 +65,10 @@ let rec string_of_ty ty = match ty with
       "String"
   | TyArr (ty1, ty2) ->
       "(" ^ string_of_ty ty1 ^ ")" ^ " -> " ^ "(" ^ string_of_ty ty2 ^ ")"
+  | TyTuple fields ->
+      List.map (fun t -> string_of_ty t) fields
+  | TyRecord fields ->
+      List.map (fun t -> string_of_ty t) fields
 ;;
 
 exception Type_error of string

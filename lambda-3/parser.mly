@@ -21,7 +21,11 @@
 %token STR
 %token LPAREN
 %token RPAREN
+%token LKEY
+%token RKEY
+%token COMA
 %token DOT
+%token SEMICOLON
 %token EQ
 %token COLON
 %token ARROW
@@ -67,6 +71,23 @@ appTerm :
       { TmConcat ($2, $3) }
   | appTerm atomicTerm
       { TmApp ($1, $2) }
+
+projection:
+    LKEY listat RKEY
+       {TmTuple $2  }
+  | LKEY listar RKEY
+       {TmTuple $2  }
+ 
+
+listat :
+    term COMA listat {$1}
+
+  | term {$1}
+
+listar : 
+    atomicTerm EQ atomicTerm SEMICOLON listar {$1, $3}
+
+  | atomicTerm EQ atomicTerm {$1, $3}
 
 atomicTerm :
     LPAREN term RPAREN

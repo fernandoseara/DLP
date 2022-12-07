@@ -3,8 +3,8 @@ type ty =
     TyBool
   | TyNat
   | TyStr
-  | TyTuple of ty
-  | TyRecord of ty
+  | TyTuple of ty 
+  | TyRecord of ty 
   | TyArr of ty * ty
 ;;
 
