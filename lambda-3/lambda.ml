@@ -5,8 +5,8 @@ type ty =
     TyBool
   | TyNat
   | TyStr
-  | TyTuple of ty 
-  | TyRecord of ty 
+  | TyTuple of ty list
+  | TyRecord of (string * ty) list 
   | TyArr of ty * ty
 ;;
 
@@ -29,9 +29,9 @@ type term =
   | TmApp of term * term
   | TmLetIn of string * term * term
   | TmFix of term
-  | TmTuple of term
-  | TmRecord of term
-  | TmProj of term * term
+  | TmTuple of term list
+  | TmRecord of (string * term) list
+  | TmProj of term * string
 ;;
 
 type command =
@@ -66,9 +66,22 @@ let rec string_of_ty ty = match ty with
   | TyArr (ty1, ty2) ->
       "(" ^ string_of_ty ty1 ^ ")" ^ " -> " ^ "(" ^ string_of_ty ty2 ^ ")"
   | TyTuple fields ->
-      List.map (fun t -> string_of_ty t) fields
+      let rec aux = function
+          [] -> ""
+        | [f] -> string_of_ty f
+        | f::restf -> (string_of_ty f) ^ ", " ^ (aux restf)
+      in
+        "{" ^ (aux fields) ^ "}"
   | TyRecord fields ->
-      List.map (fun t -> string_of_ty t) fields
+      let aux2 (li, tyTi) =
+        li ^ ":" ^ string_of_ty tyTi
+      in
+        let rec aux1 = function
+            [] -> ""
+          | [f] -> aux2 f
+          | f::restf -> (aux2 f) ^ ", " ^ (aux1 restf)
+        in
+          "{" ^ (aux1 fields) ^ "}"
 ;;
 
 exception Type_error of string
@@ -178,7 +191,6 @@ let rec typeof ctx tm = match tm with
          | _ -> raise (Type_error ("tuple or record type expected")))
   
 ;;
-;;
 
 
 (* TERMS MANAGEMENT (EVALUATION) *)
@@ -220,6 +232,26 @@ let rec string_of_term = function
       "let " ^ s ^ " = " ^ string_of_term t1 ^ " in " ^ string_of_term t2
   | TmFix t ->
       "(fix " ^ string_of_term t ^ ")"
+  | TmTuple fields ->
+       let rec aux = function
+          [] -> ""
+        | [f] -> string_of_term f
+        | f::restf -> (string_of_term f) ^ ", " ^ (aux restf)
+      in
+        "{" ^ (aux fields) ^ "}"
+  | TmRecord fields ->
+      let aux2 (li, termTi) =
+        li ^ ":" ^ string_of_term termTi
+      in
+        let rec aux1 = function
+            [] -> ""
+          | [f] -> aux2 f
+          | f::restf -> (aux2 f) ^ ", " ^ (aux1 restf)
+        in
+          "{" ^ (aux1 fields) ^ "}"
+  | TmProj (t, s) ->
+      string_of_term t
+      
 ;;
 
 let rec ldif l1 l2 = match l1 with
@@ -312,6 +344,15 @@ let rec subst x s tm = match tm with
                 TmLetIn (z, subst x s t1, subst x s (subst y (TmVar z) t2))
   | TmFix t ->
       TmFix (subst x s t)
+
+  | TmTuple fields ->
+      TmTuple (List.map (fun t -> subst x s t) fields)   
+
+  | TmRecord fields ->
+      TmRecord (List.map (fun (lb, t) -> (lb, subst x s t)) fields)   
+  
+  | TmProj (t, lb) ->
+      TmProj (subst x s t , lb)
 ;;
 
 let rec isnumericval tm = match tm with
@@ -326,7 +367,7 @@ let rec isval tm = match tm with
   | TmAbs _ -> true
   | TmStr _ -> true
   | TmTuple fields -> List.for_all (fun t1 -> isval t1) fields
-  | TmRecord fields -> List.for_all (fun (lib, t1) -> isval t1) fields
+  | TmRecord fields -> List.for_all (fun (lb, t1) -> isval t1) fields
   | t when isnumericval t -> true
   | _ -> false
 ;;
@@ -430,7 +471,7 @@ let rec eval1 vctx tm = match tm with
            let rest' = evalafield rest in 
            v1::rest'
         | t1::rest ->
-           let t1' = eval1 ctx t1 in 
+           let t1' = eval1 vctx t1 in 
            t1'::rest
       in
       let fields' = evalafield fields in
@@ -443,20 +484,20 @@ let rec eval1 vctx tm = match tm with
            let rest' = evalafield rest in 
            (lb, v1)::rest'
         | (lb, t1)::rest ->
-           let t1' = eval1 ctx t1 in 
+           let t1' = eval1 vctx t1 in 
            (lb, t1')::rest
       in
       let fields' = evalafield fields in
       TmRecord fields'
   
   | TmProj (TmTuple fields as v1, lb) when isval v1 ->
-      (try list.nth fields (int_of_string lb - 1) with
+      (try List.nth fields (int_of_string lb - 1) with
        _ -> raise NoRuleApplies)
   | TmProj (TmRecord fields as v1, lb) when isval v1 ->
-      (try list.assoc lb fields with
+      (try List.assoc lb fields with
        Not_found -> raise NoRuleApplies)
   | TmProj (t1, lb) ->
-      let t1' = eval1 ctx t1 in
+      let t1' = eval1 vctx t1 in
       TmProj (t1', lb)
   | TmVar s ->
 	getbinding vctx s

@@ -3,8 +3,8 @@ type ty =
     TyBool
   | TyNat
   | TyStr
-  | TyTuple of ty 
-  | TyRecord of ty 
+  | TyTuple of ty list
+  | TyRecord of (string * ty) list 
   | TyArr of ty * ty
 ;;
 
@@ -27,9 +27,9 @@ type term =
   | TmApp of term * term
   | TmLetIn of string * term * term
   | TmFix of term
-  | TmTuple of term
-  | TmRecord of term
-  | TmProj of term * term
+  | TmTuple of term list
+  | TmRecord of (string * term) list
+  | TmProj of term * string
 ;;
 
 type command =

@@ -23,7 +23,7 @@
 %token RPAREN
 %token LKEY
 %token RKEY
-%token COMA
+%token COMMA
 %token DOT
 %token SEMICOLON
 %token EQ
@@ -59,35 +59,26 @@ term :
       { TmLetIn ($2, TmFix (TmAbs ($2, $4, $6)), $8) }
 
 appTerm :
-    atomicTerm
+    pathTerm
       { $1 }
-  | SUCC atomicTerm
+  | SUCC pathTerm
       { TmSucc $2 }
-  | PRED atomicTerm
+  | PRED pathTerm
       { TmPred $2 }
-  | ISZERO atomicTerm
+  | ISZERO pathTerm
       { TmIsZero $2 }
-  | CONCAT atomicTerm atomicTerm
+  | CONCAT pathTerm pathTerm
       { TmConcat ($2, $3) }
-  | appTerm atomicTerm
+  | appTerm pathTerm
       { TmApp ($1, $2) }
 
-projection:
-    LKEY listat RKEY
-       {TmTuple $2  }
-  | LKEY listar RKEY
-       {TmTuple $2  }
- 
-
-listat :
-    term COMA listat {$1}
-
-  | term {$1}
-
-listar : 
-    atomicTerm EQ atomicTerm SEMICOLON listar {$1, $3}
-
-  | atomicTerm EQ atomicTerm {$1, $3}
+pathTerm :
+    pathTerm DOT STRINGV
+      { TmProj ($1, $3) }
+  | pathTerm DOT INTV
+      { TmProj ($1, string_of_int $3) }
+  | atomicTerm
+      { $1 }
 
 atomicTerm :
     LPAREN term RPAREN
@@ -105,6 +96,33 @@ atomicTerm :
         in f $1 }
   | STRING
       { TmStr $1 }
+  | LKEY tupleFields RKEY
+       {TmTuple $2  }
+  | LKEY recordFields RKEY
+       {TmRecord $2  }
+
+tupleFields :
+    term
+      { [$1] }
+  | term COMMA tupleFields
+      { $1 :: $3 }
+
+recordFields :
+    /* empty */
+      { [] }
+  | notEmptyRecordFields
+      { $1 }
+
+notEmptyRecordFields :
+    notEmptyRecordField
+      { [$1] }
+  | notEmptyRecordField COMMA notEmptyRecordFields
+      { $1 :: $3 }
+
+notEmptyRecordField :
+    STRINGV EQ term
+      { ($1, $3) }
+
 
 ty :
     atomicTy
@@ -121,4 +139,29 @@ atomicTy :
       { TyNat }
   | STR
       { TyStr }
+  | LKEY tupleFieldTypes RKEY
+      { TyTuple $2 }
+  | LKEY recordFieldTypes RKEY
+      { TyRecord $2 }
 
+tupleFieldTypes :
+    ty
+      { [$1] }
+  | ty COMMA tupleFieldTypes
+      { $1 :: $3 }
+
+recordFieldTypes :
+    /* empty */
+      { [] }
+  | notEmptyRecordFieldTypes
+      { $1 }
+
+notEmptyRecordFieldTypes :
+    notEmptyRecordFieldType
+      { [$1] }
+  | notEmptyRecordFieldType COMMA notEmptyRecordFieldTypes
+      { $1 :: $3 }
+
+notEmptyRecordFieldType :
+    STRINGV COLON ty
+      { ($1, $3) }
